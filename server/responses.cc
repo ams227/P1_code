@@ -75,8 +75,8 @@ string extract_string(vector<uint8_t>::const_iterator &it,
 /// @return The extracted uint32_t
 uint32_t extract_size(vector<uint8_t>::const_iterator &it) {
   uint32_t res = 0;
-  memcpy(&res, &(*it), sizeof(uint32_t));
-  it += sizeof(uint32_t);
+  memcpy(&res, &(*it), sizeof(uint32_t)); // Copy the 4 bytes from buffer into res
+  it += sizeof(uint32_t); // iterator gets advanced by 4
   return res;
 }
 
@@ -86,9 +86,9 @@ uint32_t extract_size(vector<uint8_t>::const_iterator &it) {
 /// @return The extracted vector
 vector<uint8_t> extract_vec(vector<uint8_t>::const_iterator &it,
                                    size_t count) {
-  vector<uint8_t> result(it, it + count);
-  it += count;
-  return result;
+  vector<uint8_t> result(it, it + count); // constructions result from it to it plus count
+  it += count; // it = it plus count
+  return result; // return result
 }
 
 /// Respond to an ALL command by generating a list of all the usernames in the
@@ -108,10 +108,10 @@ bool handle_all(int sd, Storage *storage,
   assert(storage);
   assert(u.length() > 0);
   assert(p.length() > 0);
-  Storage::result_t r = storage->get_all_users(u, p);
-  auto resp = build_res(r.msg, r.data);
-  send_reliably(sd, resp);
-  return false;
+  Storage::result_t r = storage->get_all_users(u, p); // this gets the data by looking at all the users and you pass in a username and a password
+  auto resp = build_res(r.msg, r.data); // this makes the answers that you get into a response
+  send_reliably(sd, resp); // sends the socket the response
+  return false; // lets it know to move on
 }
 
 /// Respond to a SET command by putting the provided data into the Auth table
@@ -198,10 +198,10 @@ bool handle_bye(int sd, Storage *storage,
   assert(storage);
   assert(u.length() > 0);
   assert(p.length() > 0);
-  Storage::result_t r = storage->auth(u, p);
-  auto resp = build_res(r.msg, r.data);
-  send_reliably(sd, resp);
-  return r.succeeded;
+  Storage::result_t r = storage->auth(u, p); // its looking through the storage
+  auto resp = build_res(r.msg, r.data); // building from the given data
+  send_reliably(sd, resp); // sends the data reliably
+  return r.succeeded; // returns if it works or not (tried false but broke code)
 }
 
 /// Respond to a SAV command by persisting the file, but only if the user
@@ -221,8 +221,8 @@ bool handle_sav(int sd, Storage *storage,
   assert(storage);
   assert(u.length() > 0);
   assert(p.length() > 0);
-  Storage::result_t r = storage->save_file();
-  auto resp = build_res(r.msg, r.data);
-  send_reliably(sd, resp);
-  return false;
+  Storage::result_t r = storage->save_file(); // its looking through the storage
+  auto resp = build_res(r.msg, r.data); // building from the given data
+  send_reliably(sd, resp); // sends the data reliably
+  return false; // returns false meaning its saying its done and move on
 }
