@@ -1,0 +1,12 @@
+schema: "classroom50/repo-config/v1"
+classroom: "cse303"
+assignment: "p1"
+owner:
+  username: "ams227"
+  id: 179510549
+  accepted_at: "2026-09-07T18:20:40Z"
+source:
+  owner: "LU-CSE303"
+  owner_id: 179320229
+  repo: "pa-1-fall-2026"
+  branch: "main"
