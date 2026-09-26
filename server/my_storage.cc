@@ -54,7 +54,7 @@ public:
     assert(user.length() > 0);
     assert(pass.length() > 0);
     bool authenticated = false;
-    auth_table->do_with_readonly(user, [&](const AuthTableEntry &entry) { //chekc password
+    auth_table->do_with_readonly(user, [&](const AuthTableEntry &entry) { //checks the password
       if (entry.password == pass) {
         authenticated = true;
       }
@@ -62,7 +62,7 @@ public:
     if (authenticated) { //return OK for sucess
       return {true, RES_OK, {}};
     }
-    return {false, RES_ERR_LOGIN, {}}; //else error
+    return {false, RES_ERR_LOGIN, {}}; //else there is an error if password fails
   }
 
   /// Create a new entry in the Auth table.  If the user already exists, return
@@ -75,11 +75,11 @@ public:
   virtual result_t add_user(const string &user, const string &pass) {
     assert(user.length() > 0);
     assert(pass.length() > 0);
-    AuthTableEntry person;
-    person.username = user;
-    person.password = pass;
+    AuthTableEntry person; // entry of person
+    person.username = user; // username
+    person.password = pass; // password
     person.content = {};
-    if (auth_table->insert(user, person))
+    if (auth_table->insert(user, person)) // inserts the person into the whole data
       return {true, RES_OK, {}};
     return {false, RES_ERR_USER_EXISTS, {}};
   }
@@ -96,12 +96,12 @@ public:
                                  const vector<uint8_t> &content) {
     assert(user.length() > 0);
     assert(pass.length() > 0);
-    result_t a = auth(user, pass);
-    if (!a.succeeded) return a;
-    auth_table->do_with(user, [&](AuthTableEntry &e) {
+    result_t a = auth(user, pass); // verifies the pair
+    if (!a.succeeded) return a; // if it doesnt work return a
+    auth_table->do_with(user, [&](AuthTableEntry &e) { // looking up the data and updating their records
       e.content = content;
     });
-    return {true, RES_OK, {}};
+    return {true, RES_OK, {}}; // reports the success
   }
 
   /// Return a copy of the user data for a user, but do so only if the password
@@ -119,26 +119,21 @@ public:
     assert(pass.length() > 0);
     assert(who.length() > 0);
     result_t auth_res = auth(user, pass); //autenticate user
-
-    if (!auth_res.succeeded) { //auth failed
+    if (!auth_res.succeeded) { // This means that it faled
       return {false, RES_ERR_LOGIN, {}};
     }
-
     vector<uint8_t> content;
-    bool found = auth_table->do_with_readonly( //not change so readonly
+    bool found = auth_table->do_with_readonly( // reading the data of the user using read
         who, [&](const AuthTableEntry &entry) {
           content = entry.content;
         });
-
-    if (!found) { //could not find user
+    if (!found) { // if the user us not found
       return {false, RES_ERR_NO_USER, {}};
     }
-
     if (content.empty()) { //empty data
       return {false, RES_ERR_NO_DATA, {}};
     }
-
-    return {true, RES_OK, content}; //sucess - return user data
+    return {true, RES_OK, content}; // returns success if the user data is found
   }
 
   /// Return a newline-delimited string containing all of the usernames in the
@@ -151,24 +146,18 @@ public:
   virtual result_t get_all_users(const string &user, const string &pass) {
     assert(user.length() > 0);
     assert(pass.length() > 0);
-    result_t auth_res = auth(user, pass); //authenticate
-
-    if (!auth_res.succeeded) { //auth fail
-      return {false, RES_ERR_LOGIN, {}};
+    result_t auth_res = auth(user, pass); //authenticate the user
+    if (!auth_res.succeeded) { // The authentication failed
+      return {false, RES_ERR_LOGIN, {}}; // returns an error logging in
     }
-
     string users;
-    auth_table->do_all_readonly( //apply funtion to all entries
-        [&](const string username, const AuthTableEntry &) { //grab each user
-          users += username;
-          users += "\n";
+    auth_table->do_all_readonly( // apply funtion to all entries
+        [&](const string username, const AuthTableEntry &) { // this part is looking at all the users
+          users += username + "\n";
         });
-
-    vector<uint8_t> data(users.begin(), users.end()); //vector ification
-    return {true, RES_OK, data};
+    vector<uint8_t> data(users.begin(), users.end()); // This part is looking at all the users
+    return {true, RES_OK, data}; // returns data
   }
-
-  
 
   /// Write the entire Storage object to the file specified by this.filename. To
   /// ensure durability, Storage must be persisted in two steps.  First, it must
@@ -177,46 +166,33 @@ public:
   ///
   /// @return A result tuple, as described in storage.h
   virtual result_t save_file() {
-    string temp_filename = filename + ".tmp";
-    FILE *storage_file = fopen(temp_filename.c_str(), "wb");//open write binary - fopen needs c str
-
-    if (storage_file == nullptr) { //no file error
+    string temp_filename = filename + ".tmp"; // temp file name
+    FILE *storage_file = fopen(temp_filename.c_str(), "wb"); // open write binary
+    if (storage_file == nullptr) { // no file error
       return {false, RES_ERR_SERVER, {}};
     }
-
-    auth_table->do_all_readonly(
-        [&](const string &, const AuthTableEntry &entry) { //function for all entries: (& since already contains username) get entry and do..
-          fwrite(AUTHENTRY.data(), 1, AUTHENTRY.size(), storage_file); //write authentry bytes to storage (header)
-
-          // get lengths
-          uint32_t username_len = entry.username.size();
-          uint32_t password_len = entry.password.size();
-          uint32_t profile_len = entry.content.size();
-          //erite lengths to storage next
-          fwrite(&username_len, sizeof(uint32_t), 1, storage_file); //write bytes that are mem adress where length stored
-          fwrite(&password_len, sizeof(uint32_t), 1, storage_file);
-          fwrite(&profile_len, sizeof(uint32_t), 1, storage_file);
-
-          //write contents
-          fwrite(entry.username.data(), 1, username_len, storage_file); //.data for acrual chars in string
-          fwrite(entry.password.data(), 1, password_len, storage_file);
-
-          if (profile_len > 0) { //write profile, dont try and write zero bytes if null
-            fwrite(entry.content.data(), 1, profile_len, storage_file);
-          }
-
-          uint32_t entry_size = AUTHENTRY.size() + ( 3 * sizeof(uint32_t)) + username_len + password_len + profile_len; //check bytes written 
-          uint32_t padding = (4 - (entry_size % 4)) % 4; //make divisible by 4 -< how much padding is neeeded?
-
-          for (uint32_t i = 0; i < padding; ++i) { //write needed padding
-            uint8_t zero = 0;
-            fwrite(&zero, 1, 1, storage_file);
-          }
-        });
-
-    fclose(storage_file);
-    rename(temp_filename.c_str(), filename.c_str()); //rename temp file to final file name
-
+    auth_table->do_all_readonly([&](const string &, const AuthTableEntry &entry) { // go through all entries
+      fwrite(AUTHENTRY.data(), 1, AUTHENTRY.size(), storage_file); // write header
+      uint32_t username_len = entry.username.size(); // username length
+      uint32_t password_len = entry.password.size(); // password length
+      uint32_t profile_len = entry.content.size(); // profile length
+      fwrite(&username_len, sizeof(uint32_t), 1, storage_file); // write username length
+      fwrite(&password_len, sizeof(uint32_t), 1, storage_file); // write password length
+      fwrite(&profile_len, sizeof(uint32_t), 1, storage_file); // write profile length
+      fwrite(entry.username.data(), 1, username_len, storage_file); // write username
+      fwrite(entry.password.data(), 1, password_len, storage_file); // write password
+      if (profile_len > 0) { // only write if not empty
+        fwrite(entry.content.data(), 1, profile_len, storage_file); // write profile
+      }
+      uint32_t entry_size = AUTHENTRY.size() + (3 * sizeof(uint32_t)) + username_len + password_len + profile_len; // total size
+      uint32_t padding = (4 - (entry_size % 4)) % 4; // make divisible by 4
+      for (uint32_t i = 0; i < padding; ++i) { // write padding zeros
+        uint8_t zero = 0;
+        fwrite(&zero, 1, 1, storage_file);
+      }
+    });
+    fclose(storage_file); // close file
+    rename(temp_filename.c_str(), filename.c_str()); // rename temp to real
     return {true, RES_OK, {}};
   }
 
@@ -227,101 +203,78 @@ public:
   /// @return A result tuple, as described in storage.h.  Note that a
   ///         non-existent file is not an error.
   virtual result_t load_file() {
-    FILE *storage_file = fopen(filename.c_str(), "rb");
-
-    if (storage_file == nullptr) { //missing file not error accoring to assignment so return anyway, no error
+    FILE *storage_file = fopen(filename.c_str(), "rb"); // open read binary
+    if (storage_file == nullptr) { // missing file not an error
       return {true, "File not found: " + filename, {}};
     }
-
-    auth_table->clear(); //clear current table before reading
-
-    while (true) { //read all enttied til end of file
-      char header[4];
-      size_t header_read = fread(header, 1, 4, storage_file);
-
-      if (header_read == 0) { //nothing left - EOF
+    auth_table->clear(); // clear table before loading
+    while (true) { // read until EOF
+      char header[4]; // header buffer
+      size_t header_read = fread(header, 1, 4, storage_file); // read header
+      if (header_read == 0) { // nothing left
         break;
       }
-
-      if (header_read != 4) { //didnt read all 4 bytes: ended halfwhy through entry -> error
+      if (header_read != 4) { // partial header
         fclose(storage_file);
         return {false, RES_ERR_SERVER, {}};
       }
-
-      if (memcmp(header, AUTHENTRY.data(), 4) != 0) { //check if same as exoected format for header
+      if (memcmp(header, AUTHENTRY.data(), 4) != 0) { // wrong header
         fclose(storage_file);
         return {false, RES_ERR_SERVER, {}};
       }
-
-      //read lengths - make some variables to hold them
-      uint32_t username_len;
-      uint32_t password_len;
-      uint32_t profile_len;
-
-      if (fread(&username_len, sizeof(uint32_t), 1, storage_file) != 1 || //read 4 bytes into username_len
-          fread(&password_len, sizeof(uint32_t), 1, storage_file) != 1 || //read 4 bytes ubti password_len
-          fread(&profile_len, sizeof(uint32_t), 1, storage_file) != 1) { //read 4 bytes into profile_len
+      uint32_t username_len; // username length
+      uint32_t password_len; // password length
+      uint32_t profile_len; // profile length
+      if (fread(&username_len, sizeof(uint32_t), 1, storage_file) != 1 || // read username length
+          fread(&password_len, sizeof(uint32_t), 1, storage_file) != 1 || // read password length
+          fread(&profile_len, sizeof(uint32_t), 1, storage_file) != 1) { // read profile length
         fclose(storage_file);
         return {false, RES_ERR_SERVER, {}};
       }
-
-      if (username_len > LEN_UNAME || //check lengths are expected
-          password_len > LEN_PASSWORD ||
-          profile_len > LEN_PROFILE_FILE) {
+      if (username_len > LEN_UNAME || // check username length
+          password_len > LEN_PASSWORD || // check password length
+          profile_len > LEN_PROFILE_FILE) { // check profile length
         fclose(storage_file);
         return {false, RES_ERR_SERVER, {}};
       }
-
-      string username(username_len, '\0'); //make string of proper username size
-      if (username_len > 0 && fread(&username[0], 1, username_len, storage_file) != username_len) { //fill th eprepped bytes
+      string username(username_len, '\0'); // make username string
+      if (username_len > 0 && fread(&username[0], 1, username_len, storage_file) != username_len) { // read username
         fclose(storage_file);
         return {false, RES_ERR_SERVER, {}};
       }
-
-      string password(password_len, '\0'); //make string for password
-      if (password_len > 0 && fread(&password[0], 1, password_len, storage_file) != password_len) { //gte password
+      string password(password_len, '\0'); // make password string
+      if (password_len > 0 && fread(&password[0], 1, password_len, storage_file) != password_len) { // read password
         fclose(storage_file);
         return {false, RES_ERR_SERVER, {}};
       }
-
-      vector<uint8_t> profile(profile_len); //profile not text, so vector
-      if (profile_len > 0 && fread(profile.data(), 1, profile_len, storage_file) != profile_len) { 
+      vector<uint8_t> profile(profile_len); // make profile vector
+      if (profile_len > 0 && fread(profile.data(), 1, profile_len, storage_file) != profile_len) { // read profile
         fclose(storage_file);
         return {false, RES_ERR_SERVER, {}};
       }
-
-
-      size_t entry_size = AUTHENTRY.size() + ( 3 * sizeof(uint32_t)) + username_len + password_len + profile_len; //calculate current entry size
-      size_t padding = (4 - (entry_size % 4)) % 4; //calculate padding
-
-      for (size_t i = 0; i < padding; ++i) {
+      size_t entry_size = AUTHENTRY.size() + (3 * sizeof(uint32_t)) + username_len + password_len + profile_len; // total size
+      size_t padding = (4 - (entry_size % 4)) % 4; // calculate padding
+      for (size_t i = 0; i < padding; ++i) { // skip padding
         int c = fgetc(storage_file);
-
-        if (c == EOF) { //file ended early
+        if (c == EOF) { // file ended early
           fclose(storage_file);
           return {false, RES_ERR_SERVER, {}};
         }
-
-        if (c != 0) { //padding isnt proper padding
+        if (c != 0) { // padding not zero
           fclose(storage_file);
           return {false, RES_ERR_SERVER, {}};
         }
       }
-
-      //reconstruct the auth table entry from read file
-      AuthTableEntry entry;
-      entry.username = username;
-      entry.password = password;
-      entry.content = profile;
-
-      if (!auth_table->insert(username, entry)) { //insert with user as key and entrey as value - error if something breaks
+      AuthTableEntry entry; // build entry
+      entry.username = username; // set username
+      entry.password = password; // set password
+      entry.content = profile; // set profile
+      if (!auth_table->insert(username, entry)) { // insert into table
         fclose(storage_file);
         return {false, RES_ERR_SERVER, {}};
       }
     }
-
-    fclose(storage_file);
-
+    fclose(storage_file); // close file
     return {true, "Loaded: " + filename, {}};
   }
 };
